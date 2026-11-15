@@ -4,6 +4,34 @@ All notable changes to `tilttek/sets` will be documented in this file.
 
 Updates should follow the [Keep a CHANGELOG](https://keepachangelog.com/) principles.
 
+## 0.3.0-alpha - 2026-11-15
+
+The next version is 0.3.0-alpha: the Symfony integration leaves the library for `tilttek/sets-bundle`.
+
+### Changed
+
+- The Symfony integration under `Tilttek\Sets\Symfony` — the `tilttek:sets:deliver` command, the
+  `DeliverPendingCompletions` message and its handler, and the `tilttek_sets` schedule — moves to
+  `tilttek/sets-bundle`, which registers them from its configuration. The library has no Symfony dependency, required
+  or suggested.
+
+### Added
+
+- `Sets::deliverPending($limit)`: the undelivered completions told again for the holders waiting the longest, at most
+  1 to 10 000 holders, without knowing which holders are waiting; a holder whose handler throws holds no one back, and
+  the run ends with `Exception\DeliveryFailed`, which carries the counts and the first exception thrown.
+- `DeliveryBackoff`, the last argument of `Sets`: a holder whose delivery failed is postponed, the next runs pass it by
+  until its delay is over, a delay of one minute after a first failure, doubled after each failure that follows, never
+  above one day; a delivery that succeeds forgets the failures. The delays and the number of failures reported are the
+  application's.
+- `Event\DeliveryKeepsFailing`: told from the third failure in a row of a holder's delivery, with the holder, the
+  failures, the moment of the next attempt and what the handler threw; a listener that throws does not stop the run.
+- `Contract\PendingDeliveries`, optional beside `Contract\CompletionStore`: the holders with undelivered completions
+  and no attempt postponed, the one waiting the longest first, and the failures in a row of each holder, kept,
+  postponed and forgotten; `Store\InMemoryCompletionStore` implements it and forgets the failures of an erased holder.
+  `Exception\UnsupportedStore` says that a completion store does not.
+- Resuming deliveries and the backoff documented.
+
 ## 0.2.0-alpha - 2026-11-14
 
 ### Changed

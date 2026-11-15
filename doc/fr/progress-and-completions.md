@@ -1,4 +1,4 @@
-<!-- phil-dev source-sha256=583ea6dbf7207d2b554e467fd29b662543844210000e35d5ded35191159bb437 -->
+<!-- phil-dev source-sha256=a3ac9ee372d5450cac745af9d96bfee37baad9a096a8aceaf20a58fdec721f59 -->
 # Progression et complétions
 
 ## Possessions
@@ -46,7 +46,38 @@ et marquée remise une fois son événement réparti sans exception :
   avec les récompenses de la version sous laquelle elle a été obtenue, même quand il n'enregistre rien de nouveau.
 - `Sets::deliver($holder)` annonce chaque complétion non remise du détenteur, dans tous les ensembles, et retourne
   combien ont été remises : l'application l'appelle pour reprendre sans attendre que les possessions changent, depuis
-  une nouvelle tentative, une tâche planifiée ou la prochaine visite du détenteur.
+  une nouvelle tentative ou la prochaine visite du détenteur.
+- `Sets::deliverPending($limit)` fait de même pour les détenteurs qui ont des complétions non remises, au plus `$limit`
+  d'entre eux, de 1 à 10 000, celui qui attend depuis le plus longtemps d'abord, et retourne combien de complétions ont
+  été remises : une commande ou une tâche planifiée l'appelle sans savoir quels détenteurs attendent. Le stockage de
+  complétions implémente aussi `Contract\PendingDeliveries`, qui liste ces détenteurs ; sinon l'appel lève
+  `UnsupportedStore`.
+
+`deliverPending()` ne laisse pas un détenteur retenir les autres : quand un gestionnaire lève une exception pour un
+détenteur, les détenteurs suivants sont informés quand même, et l'exécution se termine par une `DeliveryFailed` qui
+porte combien de complétions ont été remises, combien de détenteurs ont échoué sur combien ont été informés, et, comme
+exception précédente, la première exception qu'un gestionnaire a levée.
+
+Un détenteur dont la remise a échoué est repoussé par le `DeliveryBackoff` donné à `Sets` : les exécutions suivantes le
+passent jusqu'à la fin de son délai, et les détenteurs derrière lui sont informés à sa place. Le délai est d'une minute
+après un premier échec, doublé après chaque échec qui suit, et jamais au-delà d'un jour ; une remise réussie oublie les
+échecs. À partir du troisième échec de suite, chaque échec est aussi annoncé par un événement
+`Event\DeliveryKeepsFailing`, qui porte le détenteur, les échecs, le moment de la prochaine tentative et ce que le
+gestionnaire a levé, pour que l'application le journalise ou prévienne quelqu'un ; un écouteur de cet événement qui lève
+une exception n'arrête pas l'exécution.
+
+```php
+use Tilttek\Sets\DeliveryBackoff;
+
+new Sets($definitions, $completions, $clock, $dispatcher, new DeliveryBackoff(
+    firstDelay: 30,       // seconds after a first failure
+    longestDelay: 3_600,  // never longer
+    reportAfter: 5,       // DeliveryKeepsFailing from the fifth failure in a row
+));
+```
+
+`record()` et `deliver()` informent un détenteur tout de suite, repoussé ou non. Voir
+[Reprendre les remises](installation.md#reprendre-les-remises).
 
 Une complétion est donc annoncée **au moins une fois**, pas exactement une fois : un gestionnaire qui a accordé les
 récompenses puis a échoué, ou deux processus qui remettent la même complétion au même moment, l'annoncent deux fois.
